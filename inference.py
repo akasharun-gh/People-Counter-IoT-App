@@ -44,91 +44,75 @@ class Network:
         self.infer_request = None
 
     def load_model(self, model, device="CPU", cpu_extension=None):
-        '''
-        Load the model given IR files.
-        Defaults to CPU as device for use in the workspace.
-        Synchronous requests made within.
-        '''
         ### TODO: Load the model ###
         model_xml = model
         model_weights = os.path.splitext(model_xml)[0] + ".bin"
-
+        
         # Read IR as IENetwork
-        self.network = IENetwork(model_xml, model_weights)
-        ### TODO: Check for supported layers ###
-        # Initialize the core
+        self.network = IENetwork(model=model_xml, weights=model_weights)
         self.core = IECore()
-
+        
+        ### TODO: Add any necessary extensions ###
+        # Add CPU extension if applicable
+        if cpu_extension and 'CPU' in  device:
+            self.core.add_extension(extension_path=cpu_extension, device_name="CPU")
+            
+        ### TODO: Check for supported layers ###
         supported_layers = self.core.query_network(network=self.network , device_name=device)
-
+        
         ### Check for any unsupported layers, and let the user
         ### know if anything is missing. Exit the program, if so.
         unsupported_layers = [l for l in self.network.layers.keys() if l not in supported_layers]
         if len(unsupported_layers) != 0:
             log.error("Unsupported layers found: {}".format(unsupported_layers))
             log.error("Check whether extensions are available to add to IECore.")
-            #sys.exit(1)
-
-        ### TODO: Add any necessary extensions ###
-        # Add CPU extension if applicable
-        if cpu_extension and 'CPU' in  device:
-            self.core.add_extension(extension_path=cpu_extension, device_name="CPU")
-
+            sys.exit(1)
+        
         ### TODO: Return the loaded inference plugin ###
         self.exec_network = self.core.load_network(network=self.network, device_name=device, num_requests=1)
-
-        # Get the input layer
+        
+        # Get input layer
         self.input_blob = next(iter(self.network.inputs))
         self.output_blob = next(iter(self.network.outputs))
-        ### Note: You may need to update the function parameters. ###
+        
+        #print(self.get_input_shape())
+        
         return self.core, self.get_input_shape()
 
     def get_input_shape(self):
         ### TODO: Return the shape of the input layer ###
-        '''
-        Gets the input shape of the network
-        '''
+        #return self.network.inputs[self.input_blob].shape
+        '''input_shape = {}
+        for shape in self.network.inputs:
+            input_shape[shape] = (self.network.inputs[shape].shape)'''
         return self.network.inputs[self.input_blob].shape
-
+        
 
     def exec_net(self, request_id, image):
         ### TODO: Start an asynchronous request ###
-        ### TODO: Return any necessary information ###
-        ### Note: You may need to update the function parameters. ###
-        '''
-        Makes an asynchronous inference request, given an input image.
-        '''
+        #self.infer_request = self.exec_network.start_async(request_id=request_id, inputs=image)
+        
         self.infer_request = self.exec_network.start_async(request_id=request_id, inputs={self.input_blob:image})
+        
+        ### TODO: Return any necessary information ### 
         return self.exec_network
 
     def wait(self, request_id):
         ### TODO: Wait for the request to be complete. ###
         ### TODO: Return any necessary information ###
-        ### Note: You may need to update the function parameters. ###
-        """
-        Waits for the result to become available.
-        :param request_id: Index of Infer request value. Limited to device capabilities.
-        :return: Timeout value
-        """
+        
         status = self.exec_network.requests[request_id].wait(-1)
         return status
 
     def get_output(self, request_id, output=None):
         ### TODO: Extract and return the output results
-        ### Note: You may need to update the function parameters. ###
-        """
-        Gives a list of results for the output layer of the network.
-        :param request_id: Index of Infer request value. Limited to device capabilities.
-        :param output: Name of the output layer
-        :return: Results for the specified request
-        """
         if output:
             res = self.infer_request.outputs[output]
         else:
             res = self.exec_network.requests[request_id].outputs[self.output_blob]
-
+            
         return res
-
+    
     def clean(self):
         """
         Deletes all the instances
@@ -136,4 +120,3 @@ class Network:
         """
         del self.exec_network
         del self.core
-
