@@ -19,7 +19,12 @@
  OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
  WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 """
-
+'''
+Note to reviewer: I have made use of the starter code provided by udacity for this course
+and material taught in this course to help code this project. At times that I was stuck I 
+have used Knowledge to find and understand possible solutions and implemented them by myself
+in this project.
+'''
 
 import os
 import sys
@@ -77,7 +82,7 @@ def connect_mqtt():
     return client
 
 
-def ssd_out(frame, result, prob_threshold, width, height):
+def ssd_out_detect(frame, result, prob_threshold, width, height):
     
     """
     Parse SSD output.
@@ -85,20 +90,22 @@ def ssd_out(frame, result, prob_threshold, width, height):
     :param result: list contains the data to parse ssd
     :return: person count and frame"""
 
+    # current_count indiactes the count of people identified in the frame
     current_count=0
-    for obj in result[0][0]:
-        if obj[2] > prob_threshold:
-            xmin = int(obj[3] * width)
-            ymin = int(obj[4] * height)
-            xmax = int(obj[5] * width)
-            ymax = int(obj[6] * height)
+    for item in result[0][0]:
+        # if confidence level is greater than the probability threshold, draw bounding box
+        if item[2] > prob_threshold:
+            xmin = int(item[3] * width)
+            ymin = int(item[4] * height)
+            xmax = int(item[5] * width)
+            ymax = int(item[6] * height)
             cv2.rectangle(frame, (xmin, ymin), (xmax, ymax), (0, 255, 0), 1)
             current_count += 1
     
     return frame, current_count
 
 
-def infer_on_stream(args, client):
+def inference_func(args, client):
     """
     Initialize the inference network, stream video to network,
     and output stats and video.
@@ -117,20 +124,19 @@ def infer_on_stream(args, client):
     
     ### TODO: Load the model through `infer_network` ###
     input_shape = infer_network.load_model(args.model, args.device, args.cpu_extension)[1]
-    log.error(input_shape)
 
     ### TODO: Handle the input stream ###
     # Checks for webcam feed
     if args.input == 'CAM':
         input_stream = -1
-    # Checks for input image
+    # Checks for image file 
     elif args.input.endswith('.jpg') or args.input.endswith('.bmp') :
         single_image_mode = True
         input_stream = args.input
     # Checks for video file
     else:
         input_stream = args.input
-        assert os.path.isfile(args.input), "Specified input file doesn't exist"
+        assert os.path.isfile(args.input), "Input file not found"
 
     cap = cv2.VideoCapture(input_stream)
     
@@ -138,18 +144,20 @@ def infer_on_stream(args, client):
         cap.open(args.input)
 
     if not cap.isOpened():
-        log.error("ERROR: Unable to open video source")
-        
+        log.error("ERROR: Cannot open video file")
+
+    # get width and height of frame    
     width = cap.get(3)
     height = cap.get(4)
     
     net_input_shape = input_shape
-    cur_request_id = 0
+    request_id = 0
     last_count = 0
     total_count = 0
     start_time = 0
     person_detected = 0
     frame_count = 0
+    frame_delay = 3
     end_detection = False
     
     ### TODO: Loop until stream is over ###
@@ -163,37 +171,44 @@ def infer_on_stream(args, client):
 
         ### TODO: Pre-process the image as needed ###
         image = cv2.resize(frame, (net_input_shape[3], net_input_shape[2]))
-        # change data layout from HWC to CHW
+        # change data format from HWC to CHW
         image = image.transpose((2, 0, 1))
         image = image.reshape((1, 3, net_input_shape[2], net_input_shape[3]))
 
         ### TODO: Start asynchronous inference for specified request ###
         #im_shape = {'image_tensor': image,'image_info': image.shape[1:]}
+        # store start time for inference
         inf_start = time.time()
-        infer_network.exec_net(cur_request_id, image)
+        infer_network.exec_net(request_id, image)
         
         ### TODO: Wait for the result ###
-        if infer_network.wait(cur_request_id) == 0:
-            det_time = time.time() - inf_start      
+        if infer_network.wait(request_id) == 0:
+            # calculate time when a person is detected
+            detection_time = time.time() - inf_start      
 
             ### TODO: Get the results of the inference request ###
-            result = infer_network.get_output(cur_request_id)
+            result = infer_network.get_output(request_id)
 
             ### TODO: Extract any desired stats from the results ###
-            frame, current_count = ssd_out(frame, result, prob_threshold, width, height)
+            frame, current_count = ssd_out_detect(frame, result, prob_threshold, width, height)
             #log.error(current_count)
             #log.error(last_count)
             ### TODO: Calculate and send relevant information on ###
             ### current_count, total_count and duration to the MQTT server ###
             ### Topic "person": keys of "count" and "total" ###
             ### Topic "person/duration": key of "duration" ###
-            inf_time_message = "Inference time: {:.3f}ms".format(det_time * 1000)
-            cv2.putText(frame, inf_time_message, (15, 15), cv2.FONT_HERSHEY_COMPLEX, 0.5, (200, 10, 10), 1)
+            disp_inf_time = "Inference time: {:.2f}ms".format(detection_time * 1000)
+            # Syntax: cv2.putText(image, text, org, font, fontScale, color[, thickness[, lineType[, bottomLeftOrigin]]])
+            cv2.putText(frame, disp_inf_time, (15, 15), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (5, 5, 200), 1)
             
-            #log.error("Curr ", current_count)
-            #log.error("Last ", last_count)
-            
-            # When a new person enters the video
+            # Check is new person has entered the video
+            '''
+            > end_detection is a boolean that is set to 'True' when a person is detected
+            and is used to handle false restart of inference time if the person is 
+            re-detected.
+            > person_detected is used here as a tri-state variable that helps prevent
+            multiple counts for the same person when detection accuracy is low.
+            ''' 
             if current_count > last_count:
                 if not end_detection:
                     start_time = time.time()
@@ -203,18 +218,23 @@ def infer_on_stream(args, client):
                 client.publish("person", json.dumps({"total": total_count}))
                 
                 
-            # Duration of person in the video
+            # check for false double detection
             if current_count < last_count and last_count != 2:
                 person_detected = -1
                 
-                
+            # if person is not detected, increment frame_count   
             if person_detected == -1:
                 frame_count += 1
             else:
                 frame_count = 0
-                
+            '''
+            wait till frame count becomes 20 after last detection to handle
+            detection of same person multiple times.
+            ''' 
             if frame_count == 20:
-                duration = int(time.time() - start_time - 3) 
+                # calculate duration of person in the frame
+                # fame_delay is the delay caused by the wait after last detection; calculated by observation 
+                duration = int(time.time() - start_time - frame_delay) 
                 # Publish messages to MQTT server
                 client.publish("person/duration", json.dumps({"duration": duration}))
                 end_detection = False
@@ -252,7 +272,7 @@ def main():
     # Connect to the MQTT server
     client = connect_mqtt()
     # Perform inference on the input stream
-    infer_on_stream(args, client)
+    inference_func(args, client)
 
 
 if __name__ == '__main__':

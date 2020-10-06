@@ -22,6 +22,13 @@
  WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 """
 
+'''
+Note to reviewer: I have made use of the starter code provided by udacity for this course
+and material taught in this course to help code this project. At times that I was stuck I 
+have used Knowledge to find and understand possible solutions and implemented them by myself
+in this project.
+'''
+
 import os
 import sys
 import logging as log
@@ -53,7 +60,7 @@ class Network:
         self.core = IECore()
         
         ### TODO: Add any necessary extensions ###
-        # Add CPU extension if applicable
+        # Add CPU extension if available to handle custom layers
         if cpu_extension and 'CPU' in  device:
             self.core.add_extension(extension_path=cpu_extension, device_name="CPU")
             
@@ -65,13 +72,12 @@ class Network:
         unsupported_layers = [l for l in self.network.layers.keys() if l not in supported_layers]
         if len(unsupported_layers) != 0:
             log.error("Unsupported layers found: {}".format(unsupported_layers))
-            log.error("Check whether extensions are available to add to IECore.")
             sys.exit(1)
         
         ### TODO: Return the loaded inference plugin ###
         self.exec_network = self.core.load_network(network=self.network, device_name=device, num_requests=1)
         
-        # Get input layer
+        # Get input and output blobs
         self.input_blob = next(iter(self.network.inputs))
         self.output_blob = next(iter(self.network.outputs))
         
@@ -81,10 +87,10 @@ class Network:
 
     def get_input_shape(self):
         ### TODO: Return the shape of the input layer ###
-        #return self.network.inputs[self.input_blob].shape
         '''input_shape = {}
         for shape in self.network.inputs:
             input_shape[shape] = (self.network.inputs[shape].shape)'''
+
         return self.network.inputs[self.input_blob].shape
         
 
@@ -107,11 +113,11 @@ class Network:
     def get_output(self, request_id, output=None):
         ### TODO: Extract and return the output results
         if output:
-            res = self.infer_request.outputs[output]
+            result  = self.infer_request.outputs[output]
         else:
-            res = self.exec_network.requests[request_id].outputs[self.output_blob]
+            result = self.exec_network.requests[request_id].outputs[self.output_blob]
             
-        return res
+        return result
     
     def clean(self):
         """
