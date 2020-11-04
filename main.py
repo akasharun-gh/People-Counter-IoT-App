@@ -19,12 +19,6 @@
  OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
  WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 """
-'''
-Note to reviewer: I have made use of the starter code provided by udacity for this course
-and material taught in this course to help code this project. At times that I was stuck I 
-have used Knowledge to find and understand possible solutions and implemented them by myself
-in this project.
-'''
 
 import os
 import sys

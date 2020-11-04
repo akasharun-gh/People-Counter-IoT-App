@@ -256,7 +256,9 @@ Some potential use cases of the people counter app are,
 ## Assess Effects on End User Needs
 
 **Lighting:** is an important factor in detecting people in an environment. If the area under consideration is either too bright or too dark, it would make it difficult to identify edges in the frame, hence greatly reduce the accuracy of detection.
+
 **Model Accuracy:** Models with higher accuracy are more beneficial, but usually more complex and resource heavy models provide more accurate results. If the user has resource constraints (depends on the edge device used), a model with lower accuracy could still work well with some additional modification to handle undetected frames as is done with this project.
+
 **Image size and camera focal length:** The effects of these parameters greatly depend on the size and focal length of the images used during training of the model. Variations in these two parameters from the norm would reduce the accuracy of the model, leading to more missed detections.
 
 
